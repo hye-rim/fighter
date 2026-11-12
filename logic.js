@@ -21,7 +21,7 @@ const LOGIC_FT = (() => {
     { name: '대장', emoji: '🦁', color: '#a860e8', tag: '모든 걸 다 해요', hp: 120, dmg: 1.1, react: 9, aggr: 0.7, pL: 0.5, pH: 0.5, pBlock: 0.45, pJump: 0.18, spec: true, punish: 0.6, space: 46, speed: 1.05, big: true },
   ];
   // 튜토리얼의 연습 상대: 맞아도 거의 안 아프고, 가만히 있다가 가끔 약하게 친다
-  const DUMMY = { name: '연습 상대', emoji: '🥋', color: '#bbbbbb', tag: '연습', hp: 400, dmg: 0.1, react: 60, aggr: 0.05, pL: 1, pH: 0, pBlock: 0, pJump: 0, spec: false, punish: 0, space: 44, speed: 0.6 };
+  const DUMMY = { name: '연습 상대', emoji: '🥋', color: '#bbbbbb', tag: '연습', hp: 400, dmg: 0.1, react: 60, aggr: 0.05, pL: 1, pH: 0, pBlock: 0, pJump: 0, spec: false, punish: 0, space: 44, speed: 0.6, passive: true };
 
   const rng = (seed) => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 
@@ -149,6 +149,11 @@ const LOGIC_FT = (() => {
     const a = M.ai, P = M.P, me = M.f[1], pl = M.f[0], r = M.rng, inp = a.inp;
     inp.light = inp.heavy = inp.jump = inp.special = false;
     if (a.off) { inp.left = inp.right = inp.block = false; return inp; }      // 시험용: 컴퓨터를 끈다
+    if (P.passive) {                                                         // 연습 상대: 제자리에 서서 가끔 약하게 친다 (움직이지 않아야 처음 하는 사람도 맞힌다)
+      inp.left = inp.right = inp.block = false;
+      if (Math.abs(pl.x - me.x) > MOVES.light.reach + 6) a.seen = 0; else if (free(me) && ++a.seen > 100) { inp.light = true; a.seen = 0; }   // 가까이 온 지 1.7초 뒤에야 약하게 친다
+      return inp;
+    }
     me.speedMul = P.speed;
     const dist = Math.abs(pl.x - me.x), toward = Math.sign(pl.x - me.x) || 1;
     const plAtk = pl.st === 'atk' && pl.move !== 'special', mv = plAtk ? MOVES[pl.move] : null;

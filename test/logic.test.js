@@ -119,3 +119,9 @@ test('tutorial mode: the practice partner barely hurts, the player cannot be kno
   run(M, 60 * 70, null); assert.ok(M.f[0].hp >= 1, 'never knocked out'); assert.strictEqual(M.phase, 'fight', 'no time limit');
   M.f[0].energy = 0; run(M, 90, null); assert.strictEqual(M.f[0].energy, 100);
 });
+
+test('the practice partner stands still, so a new player can always land a hit', () => {
+  const M = L.newMatch({ tutorial: true, seed: 4 }); let g = 0; while (M.phase !== 'fight' && g++ < 100) L.step(M, null);
+  const x0 = M.f[1].x; run(M, 600, null); assert.strictEqual(M.f[1].x, x0, 'does not move');
+  M.f[0].x = M.f[1].x - 38; const hp = M.f[1].hp; run(M, 30, (i) => I({ heavy: i === 0 })); assert.ok(M.f[1].hp < hp, 'heavy lands');
+});
