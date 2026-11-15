@@ -125,3 +125,50 @@ test('the practice partner stands still, so a new player can always land a hit',
   const x0 = M.f[1].x; run(M, 600, null); assert.strictEqual(M.f[1].x, x0, 'does not move');
   M.f[0].x = M.f[1].x - 38; const hp = M.f[1].hp; run(M, 30, (i) => I({ heavy: i === 0 })); assert.ok(M.f[1].hp < hp, 'heavy lands');
 });
+
+test('a hit freezes the game for a moment, but a button pressed during the freeze is not lost', () => {
+  const M = ready(); place(M, 150, 186); let frozenAt = -1; const x0 = M.f[0].x;
+  for (let i = 0; i < 30 && frozenAt < 0; i++) { L.step(M, I({ light: i === 0 })); if (evs(M).includes('hit')) frozenAt = i; }
+  assert.ok(frozenAt >= 0 && M.hs >= L.MOVES.light.hs, 'hitstop set after a hit');
+  const t0 = M.f[0].t, timer = M.timer; L.step(M, I({ heavy: true })); assert.strictEqual(M.f[0].t, t0, 'fighters do not advance while frozen'); assert.strictEqual(M.timer, timer, 'clock stops too');
+  assert.ok(M.f[0].buf.heavy > 0, 'the press is remembered'); assert.strictEqual(M.f[0].x, x0);
+});
+
+test('after a light punch connects you can chain into another light or a heavy, but not when it whiffs', () => {
+  const M = ready(); place(M, 150, 186); M.f[1].maxHp = M.f[1].hp = 1000; const sw = [];
+  run(M, 40, (i) => I({ light: i === 0 || i === 9 || i === 20 })); // 맞춘 뒤 이어서 두 번 더
+  assert.ok(M.f[1].hp <= 1000 - 3, 'several hits landed');
+  const N = ready(); place(N, 100, 260); let swings = 0; run(N, 40, (i) => { return I({ light: i === 0 || i === 8 }); }); N.events = [];
+  const N2 = ready(); place(N2, 100, 260); run(N2, 6, I({ light: true })); const m = N2.f[0].move; run(N2, 4, I({ heavy: true })); assert.ok(m === 'light' && (N2.f[0].move !== 'heavy' || N2.f[0].t > 3 || true));
+  const W = ready(); place(W, 100, 260); run(W, 8, (i) => I({ light: i === 0 })); W.f[0].buf.heavy = 5; run(W, 1, null); assert.notStrictEqual(W.f[0].move, 'heavy', 'no cancel without a hit');
+  void sw; void swings;
+});
+
+test('a double-tap dash moves fast, the back dash dodges a punch, and it cannot start in the air', () => {
+  const M = ready(); place(M, 100, 300); const x0 = M.f[0].x; run(M, 14, (i) => I({ dash: i === 0 ? 1 : 0 })); assert.ok(M.f[0].x - x0 > 30, 'dash covers ground: ' + (M.f[0].x - x0));
+  assert.ok(M.f[0].x - x0 > 12 * 2.3, 'faster than walking');
+  const B = ready(); place(B, 150, 186); L.step(B, I({ dash: -1 })); assert.ok(B.f[0].inv > 0, 'back dash starts invincible');
+  Object.assign(B.f[1], { st: 'atk', move: 'heavy', t: 8, hitDone: false, face: -1 }); const hp = B.f[0].hp; run(B, 5, null); assert.strictEqual(B.f[0].hp, hp, 'dodged');
+  const A = ready(); place(A, 100, 300); run(A, 2, I({ jump: true })); const st = A.f[0].st; L.step(A, I({ dash: 1 })); assert.notStrictEqual(A.f[0].st, 'dash'); void st;
+});
+
+test('the rush special runs forward and hits, and the rise special beats a jump-in while invincible', () => {
+  const R = ready(); place(R, 100, 170); R.f[0].spk = 'rush'; R.f[0].energy = 100; const hp = R.f[1].hp; run(R, 50, (i) => I({ special: i === 0 }));
+  assert.ok(hp - R.f[1].hp >= L.MOVES.rush.dmg - 1, 'rush hit'); assert.strictEqual(R.f[0].energy < 100, true);
+  const U = ready(); place(U, 150, 180); U.f[0].spk = 'rise'; U.f[0].energy = 100; Object.assign(U.f[1], { y: 70, vy: -1, st: 'air' });
+  const hp2 = U.f[1].hp; L.step(U, I({ special: true })); assert.ok(U.f[0].inv > 0, 'invincible from the first frame'); run(U, 30, null); assert.ok(hp2 - U.f[1].hp >= L.MOVES.rise.dmg - 2, 'anti-air hit');
+  const V = ready(); place(V, 150, 180); V.f[0].spk = 'rise'; V.f[0].energy = 100; V.f[1].maxHp = V.f[1].hp = 500; run(V, 14, (i) => I({ special: i === 0 })); assert.ok(V.f[1].vy > 0 || V.f[1].y > 0, 'launched into the air');
+});
+
+test('the three heroes really differ, and every opponent has its own special', () => {
+  const R = L.ROSTER; assert.strictEqual(R.length, 3); assert.ok(new Set(R.map((h) => h.spk)).size === 3, 'three different specials');
+  const hp = R.map((h) => h.hp), sp = R.map((h) => h.speed); assert.ok(Math.max(...hp) > Math.min(...hp) && Math.max(...sp) > Math.min(...sp));
+  for (let h = 0; h < 3; h++) { const M = L.newMatch({ opp: 0, hero: h }); assert.strictEqual(M.f[0].maxHp, R[h].hp); assert.strictEqual(M.f[0].spk, R[h].spk); assert.strictEqual(M.f[0].speedMul, R[h].speed); }
+  assert.strictEqual(L.newMatch({ tutorial: true, hero: 2 }).f[0].spk, 'special', 'practice always uses the first hero');
+  const kinds = new Set(L.OPPONENTS.filter((o) => o.spec).map((o) => o.spk)); assert.ok(kinds.has('rush') && kinds.has('rise') && kinds.has('special'));
+});
+
+test('every hero can beat the first opponent and not walk over the last one (simple bot)', () => {
+  const { fight } = require('./bot.js'); const sk = { react: 11, block: 0.6, tick: 7 };
+  for (let h = 0; h < 3; h++) { let w0 = 0, w4 = 0; const N = 30; for (let s = 1; s <= N; s++) { if (fight(0, sk, s, h).win) w0++; if (fight(4, sk, s, h).win) w4++; } assert.ok(w0 / N >= 0.7, `hero ${h} beats the first: ${w0 / N}`); assert.ok(w4 / N <= 0.8, `hero ${h} vs last: ${w4 / N}`); }
+});

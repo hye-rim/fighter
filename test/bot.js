@@ -22,8 +22,8 @@ function bot(skill) {
     return inp;
   };
 }
-function fight(opp, skill, seed) {
-  const M = L.newMatch({ opp, seed }); const r = L.rng(seed * 7 + 1), b = bot(skill);
+function fight(opp, skill, seed, hero = 0) {
+  const M = L.newMatch({ opp, seed, hero }); const r = L.rng(seed * 7 + 1), b = bot(skill);
   let n = 0; while (M.phase !== 'match' && n++ < 60 * 60 * 8) L.step(M, b(M, r));
   return { win: M.result === 'win', frames: n };
 }
